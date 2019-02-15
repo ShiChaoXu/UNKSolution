@@ -16,24 +16,27 @@ namespace Unk.Biz
             using (SqlConnection conn = new SqlConnection(Core.Utils.SqlConnectionString))
             {
                 var _results = new List<EveryDataViewGainsEntity>();
-                var aList = conn.Query<TokenStoreEntity>("SELECT * FROM [TokenStore]");
+                var aList = conn.Query<TokenStoreEntity>("SELECT * FROM [TokenStore] where [Status] = 1");
 
                 foreach (var item in aList)
                 {
-                    EveryDataViewGainsEntity entity = new EveryDataViewGainsEntity();
                     var rList = conn.Query<GainsInHistoryEntity>($@"select top(2) b.TokenID,b.CurrentPrice,b.CreateTime from dbo.TokenStore as a 
 left join
 GainsInHistory as b 
 on a.TokenHearderText = b.TokenID
 where a.TokenHearderText = '{item.TokenHearderText}'
 order by b.CreateTime desc").ToList();
-                    entity.TokenID = item.TokenHearderText;
-                    entity.TokenIcon = item.TokenIco;
-                    entity.CurrentDescript = item.TokenDescription;
-                    entity.CurrentPrice = rList[0].CurrentPrice;
-                    entity.YesterdayPrice = rList[1].CurrentPrice;
-                    entity.IncreaseThan = Math.Round(((entity.CurrentPrice - entity.YesterdayPrice) / entity.YesterdayPrice) * 100, 2);
-                    _results.Add(entity);
+                    if (rList.Count > 0)
+                    {
+                        EveryDataViewGainsEntity entity = new EveryDataViewGainsEntity();
+                        entity.TokenID = item.TokenHearderText;
+                        entity.TokenIcon = item.TokenIco;
+                        entity.CurrentDescript = item.TokenDescription;
+                        entity.CurrentPrice = rList[0].CurrentPrice;
+                        entity.YesterdayPrice = rList[1].CurrentPrice;
+                        entity.IncreaseThan = Math.Round(((entity.CurrentPrice - entity.YesterdayPrice) / entity.YesterdayPrice) * 100, 2);
+                        _results.Add(entity);
+                    }
                 }
 
                 return _results;
@@ -59,8 +62,35 @@ SELECT * FROM TokenDetails WHERE UserID = ${p_UserID}
             using (SqlConnection conn = new SqlConnection(Core.Utils.SqlConnectionString))
             {
                 return conn.Query<GainsInHistoryEntity>($@"SELECT * FROM [GainsInHistory]
-  where TokenID = '{p_type}'
+  where TokenID = '{p_type}' 
   order by CreateTime desc").ToList();
+            }
+        }
+
+
+        public Int64 GetTokenCount(string p_type, string p_userid)
+        {
+            using (SqlConnection conn = new SqlConnection(Core.Utils.SqlConnectionString))
+            {
+                return conn.Query<int>($"SELECT ISNULL(SUM([CurrentIcon]),0) FROM TokenDetails WHERE UserID = {p_userid} and TokenType = '{p_type}'").FirstOrDefault();
+            }
+        }
+
+        public bool CheckHasSign(string p_type, string p_userid)
+        {
+            using (SqlConnection conn = new SqlConnection(Core.Utils.SqlConnectionString))
+            {
+                var sql = $@"select COUNT(id) from dbo.TokenDetails where UserID = {p_userid} and TokenType = '{p_type}' and CreateTime BETWEEN '{DateTime.Now.ToString("yyyy-MM-dd")}' and '{DateTime.Now.AddDays(1).ToString("yyyy-MM-dd")}'";
+                return conn.Query<int>(sql).FirstOrDefault() > 0;
+            }
+        }
+
+        public bool UpdateAccountCoin(string p_type, string p_userid, string p_total, string p_desc)
+        {
+            using (SqlConnection conn = new SqlConnection(Core.Utils.SqlConnectionString))
+            {
+                return conn.Execute($@"INSERT INTO TokenDetails(UserID,TokenType,CurrentIcon,CurrentDescription,Stauts) VALUES
+                                           ({p_userid},'{p_type}',{p_total},'{p_desc}',1)") > 0;
             }
         }
     } 
